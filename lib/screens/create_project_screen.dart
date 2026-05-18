@@ -44,7 +44,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     _addStage(); // второй этап
   }
 
-  // ========== Этапы ==========
   void _addStage() {
     setState(() {
       _stages.add(Stage(
@@ -83,7 +82,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     });
   }
 
-  // ========== Теги ==========
   void _addTag(String tag) {
     if (tag.trim().isEmpty) return;
     setState(() {
@@ -96,7 +94,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     setState(() => _tags.remove(tag));
   }
 
-  // ========== Участники ==========
   void _addParticipantEmail() {
     final email = _participantEmailController.text.trim();
     if (email.isEmpty) return;
@@ -110,7 +107,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     setState(() => _participantEmails.remove(email));
   }
 
-  // ========== Сроки ==========
   Future<void> _selectStartDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
@@ -131,7 +127,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     if (picked != null) setState(() => _endDate = picked);
   }
 
-  // ========== Создание проекта ==========
   Future<void> _createProject() async {
     if (_titleController.text.trim().isEmpty) {
       _showSnackbar('Введите название проекта');
@@ -152,14 +147,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
     final service = Provider.of<ProjectService>(context, listen: false);
 
-    // Собираем все email, которые нужно проверить (наставник + участники)
     Set<String> emailsToFind = {};
     if (_mentorEmailController.text.trim().isNotEmpty) {
       emailsToFind.add(_mentorEmailController.text.trim());
     }
     emailsToFind.addAll(_participantEmails);
 
-    // Ищем пользователей в Supabase
     Map<String, String> emailToId = {};
     if (emailsToFind.isNotEmpty) {
       try {
@@ -167,7 +160,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         for (var user in foundUsers) {
           emailToId[user['email'] as String] = user['id'] as String;
         }
-        // Проверяем, что все email найдены
         for (var email in emailsToFind) {
           if (!emailToId.containsKey(email)) {
             _showSnackbar('Пользователь с email $email не найден в системе');
@@ -180,7 +172,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       }
     }
 
-    // Создаём проект
     final projectId = DateTime.now().millisecondsSinceEpoch.toString();
     final newProject = Project(
       id: projectId,
@@ -195,7 +186,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
     await service.addProject(newProject, currentUser.id);
 
-    // Добавляем этапы
     for (var stage in validStages) {
       await service.addStage(projectId, Stage(
         id: stage.id,
@@ -205,7 +195,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       ));
     }
 
-    // Добавляем наставника
     if (_mentorEmailController.text.trim().isNotEmpty) {
       final mentorId = emailToId[_mentorEmailController.text.trim()];
       if (mentorId != null) {
@@ -217,7 +206,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       }
     }
 
-    // Добавляем участников
     for (var email in _participantEmails) {
       final userId = emailToId[email];
       if (userId != null) {
@@ -244,12 +232,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Создание проекта', style: AppTheme.headline2)),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ЛЕВАЯ КОЛОНКА: название, этапы, теги
+            // ЛЕВАЯ КОЛОНКА
             Expanded(
               flex: 2,
               child: Column(
@@ -264,13 +252,15 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                   const SizedBox(height: 24),
                   Text('Этапы', style: AppTheme.headline2),
                   const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: _stages.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (ctx, index) {
-                        final stage = _stages[index];
-                        return Row(
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _stages.length,
+                    itemBuilder: (ctx, index) {
+                      final stage = _stages[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
                           children: [
                             Expanded(
                               child: TextFormField(
@@ -285,9 +275,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                               onPressed: () => _removeStage(index),
                             ),
                           ],
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -340,7 +330,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               ),
             ),
             const SizedBox(width: 24),
-            // ПРАВАЯ КОЛОНКА: участники, наставник, описание, сроки
+            // ПРАВАЯ КОЛОНКА
             Expanded(
               flex: 1,
               child: Column(
@@ -425,6 +415,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                     onPressed: _createProject,
                     child: const Text('Создать проект'),
                   ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
