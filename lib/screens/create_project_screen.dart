@@ -17,25 +17,34 @@ class CreateProjectScreen extends StatefulWidget {
 class _CreateProjectScreenState extends State<CreateProjectScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  // Теги
   final _newTagController = TextEditingController();
-  final _newParticipantController = TextEditingController();
-  final _mentorController = TextEditingController();
+  List<String> _tags = [];
+  final List<String> _suggestedTags = ['#наука', '#AI', '#программирование', '#творчество', '#дизайн'];
+
+  // Этапы
+  List<Stage> _stages = [];
+
+  // Участники (email)
+  final _participantEmailController = TextEditingController();
+  List<String> _participantEmails = [];
+
+  // Наставник (email)
+  final _mentorEmailController = TextEditingController();
+
+  // Сроки
   DateTime? _startDate;
   DateTime? _endDate;
-
-  List<Stage> _stages = [];
-  List<String> _tags = [];
-  List<String> _participants = [];
-
-  final List<String> _suggestedTags = ['#наука', '#AI', '#программирование', '#творчество', '#дизайн'];
 
   @override
   void initState() {
     super.initState();
-    _addStage();
-    _addStage();
+    _addStage(); // первый этап
+    _addStage(); // второй этап
   }
 
+  // ========== Этапы ==========
   void _addStage() {
     setState(() {
       _stages.add(Stage(
@@ -74,6 +83,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     });
   }
 
+  // ========== Теги ==========
   void _addTag(String tag) {
     if (tag.trim().isEmpty) return;
     setState(() {
@@ -86,19 +96,21 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     setState(() => _tags.remove(tag));
   }
 
-  void _addParticipant() {
-    final name = _newParticipantController.text.trim();
-    if (name.isEmpty) return;
+  // ========== Участники ==========
+  void _addParticipantEmail() {
+    final email = _participantEmailController.text.trim();
+    if (email.isEmpty) return;
     setState(() {
-      _participants.add(name);
-      _newParticipantController.clear();
+      if (!_participantEmails.contains(email)) _participantEmails.add(email);
+      _participantEmailController.clear();
     });
   }
 
-  void _removeParticipant(String name) {
-    setState(() => _participants.remove(name));
+  void _removeParticipantEmail(String email) {
+    setState(() => _participantEmails.remove(email));
   }
 
+  // ========== Сроки ==========
   Future<void> _selectStartDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
@@ -119,7 +131,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     if (picked != null) setState(() => _endDate = picked);
   }
 
-  void _createProject() async {
+  // ========== Создание проекта ==========
+  Future<void> _createProject() async {
     if (_titleController.text.trim().isEmpty) {
       _showSnackbar('Введите название проекта');
       return;
@@ -137,6 +150,37 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       return;
     }
 
+    final service = Provider.of<ProjectService>(context, listen: false);
+
+    // Собираем все email, которые нужно проверить (наставник + участники)
+    Set<String> emailsToFind = {};
+    if (_mentorEmailController.text.trim().isNotEmpty) {
+      emailsToFind.add(_mentorEmailController.text.trim());
+    }
+    emailsToFind.addAll(_participantEmails);
+
+    // Ищем пользователей в Supabase
+    Map<String, String> emailToId = {};
+    if (emailsToFind.isNotEmpty) {
+      try {
+        final foundUsers = await service.findUsersByEmails(emailsToFind.toList());
+        for (var user in foundUsers) {
+          emailToId[user['email'] as String] = user['id'] as String;
+        }
+        // Проверяем, что все email найдены
+        for (var email in emailsToFind) {
+          if (!emailToId.containsKey(email)) {
+            _showSnackbar('Пользователь с email $email не найден в системе');
+            return;
+          }
+        }
+      } catch (e) {
+        _showSnackbar('Ошибка поиска пользователей: $e');
+        return;
+      }
+    }
+
+    // Создаём проект
     final projectId = DateTime.now().millisecondsSinceEpoch.toString();
     final newProject = Project(
       id: projectId,
@@ -149,9 +193,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       grade: 'не оценено',
     );
 
-    final service = Provider.of<ProjectService>(context, listen: false);
     await service.addProject(newProject, currentUser.id);
 
+    // Добавляем этапы
     for (var stage in validStages) {
       await service.addStage(projectId, Stage(
         id: stage.id,
@@ -161,17 +205,28 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       ));
     }
 
-    // Добавляем участников (поиск по email? Пока просто заглушка)
-    // В реальном приложении нужно получать ID пользователей по имени/email
-    for (var p in _participants) {
-      // Здесь нужно найти пользователя в таблице profiles по имени
-      // Для упрощения пропустим или добавим потом
-      // await service.addTeamMember(projectId, TeamMember(id: foundId, name: p, role: MemberRole.participant));
+    // Добавляем наставника
+    if (_mentorEmailController.text.trim().isNotEmpty) {
+      final mentorId = emailToId[_mentorEmailController.text.trim()];
+      if (mentorId != null) {
+        await service.addTeamMember(projectId, TeamMember(
+          id: mentorId,
+          name: '',
+          role: MemberRole.mentor,
+        ));
+      }
     }
 
-    if (_mentorController.text.trim().isNotEmpty) {
-      // Аналогично, нужно найти ID наставника
-      // await service.addTeamMember(projectId, TeamMember(id: mentorId, name: _mentorController.text, role: MemberRole.mentor));
+    // Добавляем участников
+    for (var email in _participantEmails) {
+      final userId = emailToId[email];
+      if (userId != null) {
+        await service.addTeamMember(projectId, TeamMember(
+          id: userId,
+          name: '',
+          role: MemberRole.participant,
+        ));
+      }
     }
 
     _showSnackbar('Проект "${newProject.title}" создан', success: true);
@@ -194,6 +249,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ЛЕВАЯ КОЛОНКА: название, этапы, теги
             Expanded(
               flex: 2,
               child: Column(
@@ -249,19 +305,19 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                     runSpacing: 8,
                     children: [
                       ..._suggestedTags.map((tag) => FilterChip(
-                            label: Text(tag),
-                            selected: _tags.contains(tag),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) _tags.add(tag);
-                                else _tags.remove(tag);
-                              });
-                            },
-                          )),
+                        label: Text(tag),
+                        selected: _tags.contains(tag),
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) _tags.add(tag);
+                            else _tags.remove(tag);
+                          });
+                        },
+                      )),
                       ..._tags.where((t) => !_suggestedTags.contains(t)).map((tag) => Chip(
-                            label: Text(tag),
-                            onDeleted: () => _removeTag(tag),
-                          )),
+                        label: Text(tag),
+                        onDeleted: () => _removeTag(tag),
+                      )),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -284,6 +340,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               ),
             ),
             const SizedBox(width: 24),
+            // ПРАВАЯ КОЛОНКА: участники, наставник, описание, сроки
             Expanded(
               flex: 1,
               child: Column(
@@ -294,37 +351,37 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Участник команды', style: AppTheme.headline2),
+                          Text('Участники команды', style: AppTheme.headline2),
                           const SizedBox(height: 8),
                           Row(
                             children: [
                               Expanded(
                                 child: TextField(
-                                  controller: _newParticipantController,
-                                  decoration: const InputDecoration(hintText: 'Имя участника'),
+                                  controller: _participantEmailController,
+                                  decoration: const InputDecoration(hintText: 'Email участника'),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               IconButton(
                                 icon: const Icon(Icons.person_add),
-                                onPressed: _addParticipant,
+                                onPressed: _addParticipantEmail,
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
-                            children: _participants.map((p) => Chip(
-                              label: Text(p),
-                              onDeleted: () => _removeParticipant(p),
+                            children: _participantEmails.map((email) => Chip(
+                              label: Text(email),
+                              onDeleted: () => _removeParticipantEmail(email),
                             )).toList(),
                           ),
                           const SizedBox(height: 16),
                           Text('Наставник команды', style: AppTheme.headline2),
                           const SizedBox(height: 8),
                           TextField(
-                            controller: _mentorController,
-                            decoration: const InputDecoration(hintText: 'Имя наставника'),
+                            controller: _mentorEmailController,
+                            decoration: const InputDecoration(hintText: 'Email наставника'),
                           ),
                         ],
                       ),
