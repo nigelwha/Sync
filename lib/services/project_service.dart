@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/project.dart';
@@ -11,6 +12,7 @@ class ProjectService extends ChangeNotifier {
 
   List<Project> get projects => _projects;
 
+  // Загрузка проектов пользователя
   Future<void> loadProjects(String userId) async {
     final response = await _supabase
         .from('project_members')
@@ -33,6 +35,7 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Создание проекта
   Future<Project> addProject(Project project, String ownerId) async {
     final response = await _supabase.from('projects').insert({
       'title': project.title,
@@ -66,6 +69,7 @@ class ProjectService extends ChangeNotifier {
     return newProject;
   }
 
+  // Поиск пользователей по email
   Future<List<Map<String, dynamic>>> findUsersByEmails(List<String> emails) async {
     if (emails.isEmpty) return [];
     final response = await _supabase
@@ -75,6 +79,7 @@ class ProjectService extends ChangeNotifier {
     return response;
   }
 
+  // Этапы
   Future<List<Stage>> getStagesForProject(String projectId) async {
     final response = await _supabase
         .from('stages')
@@ -107,6 +112,7 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Участники
   Future<List<TeamMember>> getTeamForProject(String projectId) async {
     final response = await _supabase
         .from('project_members')
@@ -148,6 +154,7 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Оценка проекта
   Future<void> updateGrade(String projectId, String newGrade) async {
     final newStatus = (newGrade == 'хорошо' || newGrade == 'отлично') ? 'завершён' : 'в работе';
     await _supabase
@@ -158,6 +165,69 @@ class ProjectService extends ChangeNotifier {
     if (index != -1) {
       _projects[index].grade = newGrade;
       _projects[index].status = newStatus;
+      notifyListeners();
+    }
+  }
+
+  // === ФАЙЛЫ ===
+  Future<Map<String, dynamic>> uploadFile(
+    String stageId,
+    String userId,
+    String fileName,
+    Uint8List bytes,
+    String mimeType,
+  ) async {
+    final fileExt = fileName.split('.').last;
+    final storagePath = 'stages/$stageId/${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+    
+    await _supabase.storage.from('project-files').uploadBinary(
+      storagePath,
+      bytes,
+      fileOptions: const FileOptions(contentType: 'application/octet-stream'),
+    );
+    
+    final response = await _supabase.from('files').insert({
+      'stage_id': stageId,
+      'uploaded_by': userId,
+      'original_name': fileName,
+      'storage_path': storagePath,
+      'mime_type': mimeType,
+      'size_bytes': bytes.length,
+      'grade': 'не оценено',
+      'author_comment': '',
+      'mentor_comment': '',
+      'uploaded_at': DateTime.now().toIso8601String(),
+    }).select();
+    
+    return response[0];
+  }
+
+  Future<List<Map<String, dynamic>>> getFilesForStage(String stageId) async {
+    final response = await _supabase
+        .from('files')
+        .select('*, profiles(full_name)')
+        .eq('stage_id', stageId)
+        .order('uploaded_at', ascending: false);
+    return response;
+  }
+
+  Future<Uint8List> downloadFile(String storagePath) async {
+    return await _supabase.storage.from('project-files').download(storagePath);
+  }
+
+  Future<void> deleteFile(String fileId, String storagePath) async {
+    await _supabase.storage.from('project-files').remove([storagePath]);
+    await _supabase.from('files').delete().eq('id', fileId);
+    notifyListeners();
+  }
+
+  Future<void> updateFileMeta(String fileId, {String? grade, String? authorComment, String? mentorComment}) async {
+    final Map<String, dynamic> updates = {};
+    if (grade != null) updates['grade'] = grade;
+    if (authorComment != null) updates['author_comment'] = authorComment;
+    if (mentorComment != null) updates['mentor_comment'] = mentorComment;
+    if (updates.isNotEmpty) {
+      await _supabase.from('files').update(updates).eq('id', fileId);
       notifyListeners();
     }
   }
