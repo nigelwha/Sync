@@ -71,11 +71,15 @@ class ProjectService extends ChangeNotifier {
   // Поиск пользователей по email
   Future<List<Map<String, dynamic>>> findUsersByEmails(List<String> emails) async {
     if (emails.isEmpty) return [];
-    final response = await _supabase
+    List<Map<String, dynamic>> allResults = [];
+      for (String email in emails) {
+      final result = await _supabase
         .from('profiles')
         .select('id, email')
-        .inFilter('email', emails);
-    return response;
+        .ilike('email', email.trim()); // ilike игнорирует регистр
+      allResults.addAll(result);
+    }
+    return allResults;
   }
 
   // Получение этапов проекта
