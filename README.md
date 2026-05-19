@@ -1,21 +1,71 @@
-<<<<<<< HEAD
-# sync_app
+# Sync – среда для совместной работы над проектами
 
-A new Flutter project.
+**Sync** – это веб-приложение для организации учебных, научных и творческих проектов. Платформа позволяет командам:
 
-## Getting Started
+- Создавать проекты и разбивать их на этапы.
+- Загружать файлы (изображения, PDF, документы) и просматривать их без скачивания.
+- Оставлять комментарии и оценки (наставник может менять статус проекта).
+- Управлять участниками и наставниками.
 
-This project is a starting point for a Flutter application.
+## 🚀 Демо
 
-A few resources to get you started if this is your first Flutter project:
+> [https://nigelwha.github.io/Sync/](https://nigelwha.github.io/Sync/)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## 🧩 Функциональность
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
-# Sync
-Веб-платформа для ведения индивидуальных и командных учебных проектов. Пользователь создаёт проект, приглашает участников и наставника, распределяет этапы работы и прикрепляет файлы разных форматов к каждому этапу. Сервис помогает удобно организовать и контролировать выполнение проекта.
->>>>>>> 8c7e030898a5083ceceec67a9795ce0fb6b8f17b
+- **Авторизация** (регистрация / вход через email).
+- **Личный кабинет** – отображается аватар, уровень, статистика по проектам.
+- **Список проектов** – карточки проектов, поиск, фильтры по тегам.
+- **Детали проекта** – этапы, участники команды, наставник, статус, оценка.
+- **Экран этапа** – список файлов (загрузка/скачивание/предпросмотр), комментарии автора и наставника, оценка файла.
+- **Создание проекта** – форма с этапами, тегами, участниками, описанием и сроками.
+
+## 🛠 Технологии
+
+- **Flutter 3.x** (Web)
+- **Supabase** (PostgreSQL, Auth, Storage)
+- **Provider** (управление состоянием)
+- **GitHub Pages** (хостинг)
+
+## учётные данные для конкурса "Цифра в деле"
+
+ilya@sync.ru password 12345678a
+nata@sync.ru password 1234asdf
+sanya@sync.ru password 1234asdf
+
+## 📦 Установка и запуск
+
+```bash
+git clone https://github.com/nigelwha/Sync.git
+cd Sync
+flutter pub get
+flutter run -d chrome
+Для запуска в вебе используйте flutter run -d web-server.
+
+##🔧 Настройка Supabase
+Создайте проект в Supabase.
+
+Выполните SQL-скрипт из файла database/schema.sql (создаст таблицы и политики).
+
+В main.dart укажите свои url и anonKey.
+
+Включите Row Level Security (или отключите для разработки).
+
+##🤝 Как внести вклад
+Форкните репозиторий.
+
+Создайте ветку для новой функциональности (git checkout -b feature/amazing).
+
+Закоммитьте изменения (git commit -m 'Add amazing feature').
+
+Запушьте ветку (git push origin feature/amazing).
+
+Откройте Pull Request.
+
+##📄 Лицензия
+MIT
+
+##📬 Контакты
+Автор: Илья Горбунов
+GitHub: @nigelwha
+Email: naissanork11@mail.ru

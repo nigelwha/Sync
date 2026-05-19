@@ -11,7 +11,6 @@ class ProjectService extends ChangeNotifier {
 
   List<Project> get projects => _projects;
 
-  // Загружаем проекты, где пользователь – участник
   Future<void> loadProjects(String userId) async {
     final response = await _supabase
         .from('project_members')
@@ -34,8 +33,7 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Создание проекта
-  Future<void> addProject(Project project, String ownerId) async {
+  Future<Project> addProject(Project project, String ownerId) async {
     final response = await _supabase.from('projects').insert({
       'title': project.title,
       'description': project.description,
@@ -46,43 +44,37 @@ class ProjectService extends ChangeNotifier {
       'grade': project.grade,
       'owner_id': ownerId,
     }).select();
-    if (response.isNotEmpty) {
-      final newProject = Project(
-        id: response[0]['id'].toString(),
-        title: response[0]['title'],
-        tags: response[0]['tags'] ?? '',
-        description: response[0]['description'],
-        startDate: response[0]['start_date'] != null ? DateTime.parse(response[0]['start_date']) : null,
-        endDate: response[0]['end_date'] != null ? DateTime.parse(response[0]['end_date']) : null,
-        status: response[0]['status'],
-        grade: response[0]['grade'],
-      );
-      _projects.add(newProject);
-      // Добавляем владельца как участника
-      await _supabase.from('project_members').insert({
-        'project_id': newProject.id,
-        'user_id': ownerId,
-        'role': 'участник',
-      });
-      notifyListeners();
-    }
+    if (response.isEmpty) throw Exception('Проект не создан');
+    
+    final newProject = Project(
+      id: response[0]['id'].toString(),
+      title: response[0]['title'],
+      tags: response[0]['tags'] ?? '',
+      description: response[0]['description'],
+      startDate: response[0]['start_date'] != null ? DateTime.parse(response[0]['start_date']) : null,
+      endDate: response[0]['end_date'] != null ? DateTime.parse(response[0]['end_date']) : null,
+      status: response[0]['status'],
+      grade: response[0]['grade'],
+    );
+    _projects.add(newProject);
+    await _supabase.from('project_members').insert({
+      'project_id': newProject.id,
+      'user_id': ownerId,
+      'role': 'участник',
+    });
+    notifyListeners();
+    return newProject;
   }
 
-  // Поиск пользователей по email
   Future<List<Map<String, dynamic>>> findUsersByEmails(List<String> emails) async {
     if (emails.isEmpty) return [];
-    List<Map<String, dynamic>> allResults = [];
-      for (String email in emails) {
-      final result = await _supabase
+    final response = await _supabase
         .from('profiles')
         .select('id, email')
-        .ilike('email', email.trim()); // ilike игнорирует регистр
-      allResults.addAll(result);
-    }
-    return allResults;
+        .inFilter('email', emails.map((e) => e.trim()).toList());
+    return response;
   }
 
-  // Получение этапов проекта
   Future<List<Stage>> getStagesForProject(String projectId) async {
     final response = await _supabase
         .from('stages')
@@ -97,24 +89,24 @@ class ProjectService extends ChangeNotifier {
     )).toList();
   }
 
-  // Добавление этапа
   Future<void> addStage(String projectId, Stage stage) async {
+    final dueDateStr = stage.dueDate != null 
+        ? stage.dueDate!.toLocal().toString().split(' ')[0]
+        : null;
     await _supabase.from('stages').insert({
       'project_id': projectId,
       'title': stage.title,
-      'due_date': stage.dueDate?.toIso8601String(),
+      'due_date': dueDateStr,
       'order_index': stage.orderIndex,
     });
     notifyListeners();
   }
 
-  // Удаление этапа
   Future<void> removeStage(String stageId) async {
     await _supabase.from('stages').delete().eq('id', stageId);
     notifyListeners();
   }
 
-  // Получение участников проекта
   Future<List<TeamMember>> getTeamForProject(String projectId) async {
     final response = await _supabase
         .from('project_members')
@@ -127,7 +119,6 @@ class ProjectService extends ChangeNotifier {
     )).toList();
   }
 
-  // Добавление участника
   Future<void> addTeamMember(String projectId, TeamMember member) async {
     await _supabase.from('project_members').insert({
       'project_id': projectId,
@@ -137,7 +128,6 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Удаление участника
   Future<void> removeTeamMember(String projectId, String userId) async {
     await _supabase
         .from('project_members')
@@ -146,14 +136,11 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Назначение наставника
   Future<void> setMentor(String projectId, String userId) async {
-    // Снять наставника со всех
     await _supabase
         .from('project_members')
         .update({'role': 'участник'})
         .match({'project_id': projectId, 'role': 'наставник'});
-    // Назначить нового
     await _supabase
         .from('project_members')
         .update({'role': 'наставник'})
@@ -161,7 +148,6 @@ class ProjectService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Обновление оценки проекта
   Future<void> updateGrade(String projectId, String newGrade) async {
     final newStatus = (newGrade == 'хорошо' || newGrade == 'отлично') ? 'завершён' : 'в работе';
     await _supabase

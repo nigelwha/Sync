@@ -17,31 +17,22 @@ class CreateProjectScreen extends StatefulWidget {
 class _CreateProjectScreenState extends State<CreateProjectScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-
-  // Теги
   final _newTagController = TextEditingController();
-  List<String> _tags = [];
-  final List<String> _suggestedTags = ['#наука', '#AI', '#программирование', '#творчество', '#дизайн'];
-
-  // Этапы
-  List<Stage> _stages = [];
-
-  // Участники (email)
   final _participantEmailController = TextEditingController();
-  List<String> _participantEmails = [];
-
-  // Наставник (email)
   final _mentorEmailController = TextEditingController();
-
-  // Сроки
+  List<String> _tags = [];
+  List<Stage> _stages = [];
+  List<String> _participantEmails = [];
   DateTime? _startDate;
   DateTime? _endDate;
+
+  final List<String> _suggestedTags = ['#наука', '#AI', '#программирование', '#творчество', '#дизайн'];
 
   @override
   void initState() {
     super.initState();
-    _addStage(); // первый этап
-    _addStage(); // второй этап
+    _addStage();
+    _addStage();
   }
 
   void _addStage() {
@@ -155,26 +146,20 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
     Map<String, String> emailToId = {};
     if (emailsToFind.isNotEmpty) {
-      try {
-        final foundUsers = await service.findUsersByEmails(emailsToFind.toList());
-        for (var user in foundUsers) {
-          emailToId[user['email'] as String] = user['id'] as String;
+      final foundUsers = await service.findUsersByEmails(emailsToFind.toList());
+      for (var user in foundUsers) {
+        emailToId[user['email'] as String] = user['id'] as String;
+      }
+      for (var email in emailsToFind) {
+        if (!emailToId.containsKey(email)) {
+          _showSnackbar('Пользователь с email $email не найден в системе');
+          return;
         }
-        for (var email in emailsToFind) {
-          if (!emailToId.containsKey(email)) {
-            _showSnackbar('Пользователь с email $email не найден в системе');
-            return;
-          }
-        }
-      } catch (e) {
-        _showSnackbar('Ошибка поиска пользователей: $e');
-        return;
       }
     }
 
-    final projectId = DateTime.now().millisecondsSinceEpoch.toString();
     final newProject = Project(
-      id: projectId,
+      id: '',
       title: _titleController.text,
       tags: _tags.join(' '),
       description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text,
@@ -184,7 +169,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       grade: 'не оценено',
     );
 
-    await service.addProject(newProject, currentUser.id);
+    final createdProject = await service.addProject(newProject, currentUser.id);
+    final projectId = createdProject.id;
 
     for (var stage in validStages) {
       await service.addStage(projectId, Stage(
@@ -217,7 +203,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       }
     }
 
-    _showSnackbar('Проект "${newProject.title}" создан', success: true);
+    _showSnackbar('Проект "${createdProject.title}" создан', success: true);
     Navigator.pop(context);
   }
 
@@ -237,7 +223,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ЛЕВАЯ КОЛОНКА
             Expanded(
               flex: 2,
               child: Column(
@@ -330,7 +315,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               ),
             ),
             const SizedBox(width: 24),
-            // ПРАВАЯ КОЛОНКА
             Expanded(
               flex: 1,
               child: Column(
